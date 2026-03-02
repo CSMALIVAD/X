@@ -2,29 +2,33 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>DNA Archer</title>
+<title>Real Physics Archery</title>
 <style>
 body {
-    margin:0;
-    overflow:hidden;
-    background:black;
+    margin: 0;
+    overflow: hidden;
+    background: linear-gradient(#87ceeb, #ffffff);
 }
-canvas {
-    display:block;
+canvas { display: block; }
+#ui {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-family: Arial;
+    font-size: 18px;
 }
-#info {
-    position:absolute;
-    top:10px;
-    left:10px;
-    color:#00ffcc;
-    font-family:Arial;
+button {
+    padding: 5px 10px;
+    margin-top: 5px;
 }
 </style>
 </head>
 <body>
 
-<div id="info">
-🧬 DNA Archer | Score: <span id="score">0</span>
+<div id="ui">
+Score: <span id="score">0</span><br>
+Wind: <span id="wind"></span><br>
+<button onclick="toggleMode()">Toggle Day/Night</button>
 </div>
 
 <canvas id="game"></canvas>
@@ -35,30 +39,30 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let gravity = 0.3;
+let gravity = 0.4;
+let wind = (Math.random()*2-1)*0.2;
 let arrow = null;
-let targets = [];
+let charging = false;
+let chargePower = 0;
 let score = 0;
+let night = false;
 
-let bow = {
-    x: 150,
-    y: canvas.height - 200
-};
+let bow = { x: 100, y: canvas.height - 150 };
+
+let target = createTarget();
 
 function createTarget(){
     return {
-        x: canvas.width - Math.random()*300,
-        y: Math.random()*canvas.height/2,
-        radius: 25 + Math.random()*20,
-        dx: (Math.random()-0.5)*2
+        x: canvas.width - 150,
+        y: Math.random()*(canvas.height-300)+100,
+        radius: 30,
+        dy: (Math.random()-0.5)*2
     };
 }
 
-for(let i=0;i<3;i++) targets.push(createTarget());
-
 function drawBow(){
-    ctx.strokeStyle="#ffffff";
-    ctx.lineWidth=4;
+    ctx.strokeStyle="brown";
+    ctx.lineWidth=6;
     ctx.beginPath();
     ctx.arc(bow.x, bow.y, 50, -Math.PI/2, Math.PI/2);
     ctx.stroke();
@@ -68,17 +72,8 @@ function drawArrow(a){
     ctx.save();
     ctx.translate(a.x, a.y);
     ctx.rotate(Math.atan2(a.vy, a.vx));
-    ctx.strokeStyle="#00ffcc";
-    ctx.lineWidth=3;
-
-    // DNA helix arrow
-    for(let i=0;i<20;i++){
-        ctx.beginPath();
-        ctx.moveTo(i*5, Math.sin(i)*5);
-        ctx.lineTo(i*5, -Math.sin(i)*5);
-        ctx.stroke();
-    }
-
+    ctx.fillStyle="black";
+    ctx.fillRect(0,-2,40,4);
     ctx.restore();
 }
 
@@ -87,72 +82,99 @@ function update(){
 
     drawBow();
 
+    // Target movement
+    target.y += target.dy;
+    if(target.y < 50 || target.y > canvas.height-50) target.dy *= -1;
+
+    ctx.fillStyle="red";
+    ctx.beginPath();
+    ctx.arc(target.x,target.y,target.radius,0,Math.PI*2);
+    ctx.fill();
+
     if(arrow){
         arrow.vy += gravity;
+        arrow.vx += wind;
         arrow.x += arrow.vx;
         arrow.y += arrow.vy;
 
         drawArrow(arrow);
 
         // collision
-        targets.forEach((t,i)=>{
-            let dx = arrow.x - t.x;
-            let dy = arrow.y - t.y;
-            let dist = Math.sqrt(dx*dx+dy*dy);
-            if(dist < t.radius){
-                surprise();
-                targets[i]=createTarget();
-                arrow=null;
-            }
-        });
+        let dx = arrow.x - target.x;
+        let dy = arrow.y - target.y;
+        if(Math.sqrt(dx*dx+dy*dy) < target.radius){
+            surprise();
+            arrow=null;
+            target=createTarget();
+            wind = (Math.random()*2-1)*0.2;
+        }
 
         if(arrow && arrow.y > canvas.height) arrow=null;
     }
 
-    targets.forEach(t=>{
-        ctx.beginPath();
-        ctx.fillStyle="purple";
-        ctx.arc(t.x,t.y,t.radius,0,Math.PI*2);
-        ctx.fill();
-
-        t.x += t.dx;
-        if(t.x < 300 || t.x > canvas.width-50) t.dx*=-1;
-    });
+    document.getElementById("wind").innerText =
+        wind > 0 ? "→ " + wind.toFixed(2) : "← " + wind.toFixed(2);
 
     requestAnimationFrame(update);
 }
 
 function surprise(){
-    let rand = Math.random();
-    if(rand<0.33){
+    let r = Math.random();
+    if(r < 0.33){
         score += 10;
-        alert("🎉 BONUS ATP +10");
-    } else if(rand<0.66){
+        alert("🎯 Perfect Shot +10");
+    } else if(r < 0.66){
         score += 20;
-        alert("🔥 CRITICAL HIT +20");
+        alert("🔥 Critical Hit +20");
     } else {
         score -= 5;
-        alert("☠ Mutation! -5");
+        alert("💨 Strong Wind Penalty -5");
     }
-    document.getElementById("score").innerText=score;
+    document.getElementById("score").innerText = score;
 }
 
-canvas.addEventListener("click", function(e){
-    if(!arrow){
-        let dx = e.clientX - bow.x;
-        let dy = e.clientY - bow.y;
-        let power = 0.1;
+canvas.addEventListener("mousedown", startCharge);
+canvas.addEventListener("mouseup", shoot);
+canvas.addEventListener("touchstart", startCharge);
+canvas.addEventListener("touchend", shoot);
 
-        arrow = {
-            x: bow.x,
-            y: bow.y,
-            vx: dx*power,
-            vy: dy*power
-        };
+function startCharge(e){
+    charging = true;
+    chargePower = 0;
+}
+
+function shoot(e){
+    if(!charging) return;
+    charging = false;
+
+    let rect = canvas.getBoundingClientRect();
+    let mx = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX) - rect.left;
+    let my = (e.changedTouches ? e.changedTouches[0].clientY : e.clientY) - rect.top;
+
+    let dx = mx - bow.x;
+    let dy = my - bow.y;
+
+    let power = Math.min(15, Math.sqrt(dx*dx+dy*dy)/10);
+
+    arrow = {
+        x: bow.x,
+        y: bow.y,
+        vx: dx * 0.05 * power,
+        vy: dy * 0.05 * power
+    };
+}
+
+function toggleMode(){
+    night = !night;
+    if(night){
+        document.body.style.background = "linear-gradient(#000022,#000000)";
+    } else {
+        document.body.style.background = "linear-gradient(#87ceeb,#ffffff)";
     }
-});
+}
 
 update();
 </script>
+
 </body>
 </html>
