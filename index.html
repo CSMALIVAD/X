@@ -2,178 +2,162 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Real Physics Archery</title>
+<title>Gravity Sand Simulator</title>
 <style>
-body {
-    margin: 0;
-    overflow: hidden;
-    background: linear-gradient(#87ceeb, #ffffff);
+body{
+    margin:0;
+    background:black;
+    overflow:hidden;
 }
-canvas { display: block; }
-#ui {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    font-family: Arial;
-    font-size: 18px;
+canvas{display:block;}
+#panel{
+    position:absolute;
+    top:10px;
+    left:10px;
+    color:white;
+    font-family:Arial;
+    font-size:14px;
 }
-button {
-    padding: 5px 10px;
-    margin-top: 5px;
+button{
+    margin:2px;
 }
 </style>
 </head>
 <body>
 
-<div id="ui">
-Score: <span id="score">0</span><br>
-Wind: <span id="wind"></span><br>
-<button onclick="toggleMode()">Toggle Day/Night</button>
+<div id="panel">
+Gravity:
+<button onclick="setGravity(0,1)">Down</button>
+<button onclick="setGravity(0,-1)">Up</button>
+<button onclick="setGravity(-1,0)">Left</button>
+<button onclick="setGravity(1,0)">Right</button>
+<br>
+<button onclick="toggleSlow()">Slow Motion</button>
+<button onclick="toggleBlackHole()">Black Hole</button>
+<button onclick="increaseMass()">Increase Mass</button>
 </div>
 
-<canvas id="game"></canvas>
+<canvas id="canvas"></canvas>
 
 <script>
-const canvas = document.getElementById("game");
+const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let gravity = 0.4;
-let wind = (Math.random()*2-1)*0.2;
-let arrow = null;
-let charging = false;
-let chargePower = 0;
-let score = 0;
-let night = false;
+const size = 4;
+const cols = Math.floor(canvas.width/size);
+const rows = Math.floor(canvas.height/size);
 
-let bow = { x: 100, y: canvas.height - 150 };
+let grid = [];
+let gravity = {x:0, y:1};
+let slow = false;
+let blackHole = false;
+let mass = 1;
 
-let target = createTarget();
-
-function createTarget(){
-    return {
-        x: canvas.width - 150,
-        y: Math.random()*(canvas.height-300)+100,
-        radius: 30,
-        dy: (Math.random()-0.5)*2
-    };
+for(let x=0;x<cols;x++){
+    grid[x] = [];
+    for(let y=0;y<rows;y++){
+        grid[x][y] = 0;
+    }
 }
 
-function drawBow(){
-    ctx.strokeStyle="brown";
-    ctx.lineWidth=6;
-    ctx.beginPath();
-    ctx.arc(bow.x, bow.y, 50, -Math.PI/2, Math.PI/2);
-    ctx.stroke();
+canvas.addEventListener("mousemove", e=>{
+    if(e.buttons){
+        let rect = canvas.getBoundingClientRect();
+        let x = Math.floor((e.clientX - rect.left)/size);
+        let y = Math.floor((e.clientY - rect.top)/size);
+        for(let i=-2;i<=2;i++){
+            for(let j=-2;j<=2;j++){
+                if(x+i>=0 && x+i<cols && y+j>=0 && y+j<rows){
+                    grid[x+i][y+j] = 1;
+                }
+            }
+        }
+    }
+});
+
+function setGravity(x,y){
+    gravity.x = x;
+    gravity.y = y;
 }
 
-function drawArrow(a){
-    ctx.save();
-    ctx.translate(a.x, a.y);
-    ctx.rotate(Math.atan2(a.vy, a.vx));
-    ctx.fillStyle="black";
-    ctx.fillRect(0,-2,40,4);
-    ctx.restore();
+function toggleSlow(){
+    slow = !slow;
+}
+
+function toggleBlackHole(){
+    blackHole = !blackHole;
+}
+
+function increaseMass(){
+    mass += 0.2;
 }
 
 function update(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(let x=0;x<cols;x++){
+        for(let y=rows-1;y>=0;y--){
+            if(grid[x][y] === 1){
 
-    drawBow();
+                let nx = x + gravity.x;
+                let ny = y + gravity.y;
 
-    // Target movement
-    target.y += target.dy;
-    if(target.y < 50 || target.y > canvas.height-50) target.dy *= -1;
+                if(nx>=0 && nx<cols && ny>=0 && ny<rows){
+                    if(grid[nx][ny] === 0){
+                        grid[nx][ny] = 1;
+                        grid[x][y] = 0;
+                    }
+                    else{
+                        // slide left/right
+                        let dir = Math.random() < 0.5 ? -1 : 1;
+                        let sx = x + dir;
+                        if(sx>=0 && sx<cols && grid[sx][y]===0){
+                            grid[sx][y]=1;
+                            grid[x][y]=0;
+                        }
+                    }
+                }
 
-    ctx.fillStyle="red";
-    ctx.beginPath();
-    ctx.arc(target.x,target.y,target.radius,0,Math.PI*2);
-    ctx.fill();
-
-    if(arrow){
-        arrow.vy += gravity;
-        arrow.vx += wind;
-        arrow.x += arrow.vx;
-        arrow.y += arrow.vy;
-
-        drawArrow(arrow);
-
-        // collision
-        let dx = arrow.x - target.x;
-        let dy = arrow.y - target.y;
-        if(Math.sqrt(dx*dx+dy*dy) < target.radius){
-            surprise();
-            arrow=null;
-            target=createTarget();
-            wind = (Math.random()*2-1)*0.2;
+                if(blackHole){
+                    let cx = Math.floor(cols/2);
+                    let cy = Math.floor(rows/2);
+                    let dx = cx - x;
+                    let dy = cy - y;
+                    if(Math.abs(dx)+Math.abs(dy)<20){
+                        grid[x][y]=0;
+                    }
+                }
+            }
         }
-
-        if(arrow && arrow.y > canvas.height) arrow=null;
     }
-
-    document.getElementById("wind").innerText =
-        wind > 0 ? "→ " + wind.toFixed(2) : "← " + wind.toFixed(2);
-
-    requestAnimationFrame(update);
 }
 
-function surprise(){
-    let r = Math.random();
-    if(r < 0.33){
-        score += 10;
-        alert("🎯 Perfect Shot +10");
-    } else if(r < 0.66){
-        score += 20;
-        alert("🔥 Critical Hit +20");
+function draw(){
+    ctx.fillStyle="black";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    ctx.fillStyle="gold";
+    for(let x=0;x<cols;x++){
+        for(let y=0;y<rows;y++){
+            if(grid[x][y]===1){
+                ctx.fillRect(x*size,y*size,size,size);
+            }
+        }
+    }
+}
+
+function loop(){
+    if(!slow){
+        update();
     } else {
-        score -= 5;
-        alert("💨 Strong Wind Penalty -5");
+        if(Math.random()<0.3) update();
     }
-    document.getElementById("score").innerText = score;
+    draw();
+    requestAnimationFrame(loop);
 }
 
-canvas.addEventListener("mousedown", startCharge);
-canvas.addEventListener("mouseup", shoot);
-canvas.addEventListener("touchstart", startCharge);
-canvas.addEventListener("touchend", shoot);
-
-function startCharge(e){
-    charging = true;
-    chargePower = 0;
-}
-
-function shoot(e){
-    if(!charging) return;
-    charging = false;
-
-    let rect = canvas.getBoundingClientRect();
-    let mx = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX) - rect.left;
-    let my = (e.changedTouches ? e.changedTouches[0].clientY : e.clientY) - rect.top;
-
-    let dx = mx - bow.x;
-    let dy = my - bow.y;
-
-    let power = Math.min(15, Math.sqrt(dx*dx+dy*dy)/10);
-
-    arrow = {
-        x: bow.x,
-        y: bow.y,
-        vx: dx * 0.05 * power,
-        vy: dy * 0.05 * power
-    };
-}
-
-function toggleMode(){
-    night = !night;
-    if(night){
-        document.body.style.background = "linear-gradient(#000022,#000000)";
-    } else {
-        document.body.style.background = "linear-gradient(#87ceeb,#ffffff)";
-    }
-}
-
-update();
+loop();
 </script>
 
 </body>
