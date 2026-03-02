@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>DNA Archer</title>
+<style>
+body {
+    margin:0;
+    overflow:hidden;
+    background:black;
+}
+canvas {
+    display:block;
+}
+#info {
+    position:absolute;
+    top:10px;
+    left:10px;
+    color:#00ffcc;
+    font-family:Arial;
+}
+</style>
+</head>
+<body>
+
+<div id="info">
+🧬 DNA Archer | Score: <span id="score">0</span>
+</div>
+
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let gravity = 0.3;
+let arrow = null;
+let targets = [];
+let score = 0;
+
+let bow = {
+    x: 150,
+    y: canvas.height - 200
+};
+
+function createTarget(){
+    return {
+        x: canvas.width - Math.random()*300,
+        y: Math.random()*canvas.height/2,
+        radius: 25 + Math.random()*20,
+        dx: (Math.random()-0.5)*2
+    };
+}
+
+for(let i=0;i<3;i++) targets.push(createTarget());
+
+function drawBow(){
+    ctx.strokeStyle="#ffffff";
+    ctx.lineWidth=4;
+    ctx.beginPath();
+    ctx.arc(bow.x, bow.y, 50, -Math.PI/2, Math.PI/2);
+    ctx.stroke();
+}
+
+function drawArrow(a){
+    ctx.save();
+    ctx.translate(a.x, a.y);
+    ctx.rotate(Math.atan2(a.vy, a.vx));
+    ctx.strokeStyle="#00ffcc";
+    ctx.lineWidth=3;
+
+    // DNA helix arrow
+    for(let i=0;i<20;i++){
+        ctx.beginPath();
+        ctx.moveTo(i*5, Math.sin(i)*5);
+        ctx.lineTo(i*5, -Math.sin(i)*5);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+function update(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    drawBow();
+
+    if(arrow){
+        arrow.vy += gravity;
+        arrow.x += arrow.vx;
+        arrow.y += arrow.vy;
+
+        drawArrow(arrow);
+
+        // collision
+        targets.forEach((t,i)=>{
+            let dx = arrow.x - t.x;
+            let dy = arrow.y - t.y;
+            let dist = Math.sqrt(dx*dx+dy*dy);
+            if(dist < t.radius){
+                surprise();
+                targets[i]=createTarget();
+                arrow=null;
+            }
+        });
+
+        if(arrow && arrow.y > canvas.height) arrow=null;
+    }
+
+    targets.forEach(t=>{
+        ctx.beginPath();
+        ctx.fillStyle="purple";
+        ctx.arc(t.x,t.y,t.radius,0,Math.PI*2);
+        ctx.fill();
+
+        t.x += t.dx;
+        if(t.x < 300 || t.x > canvas.width-50) t.dx*=-1;
+    });
+
+    requestAnimationFrame(update);
+}
+
+function surprise(){
+    let rand = Math.random();
+    if(rand<0.33){
+        score += 10;
+        alert("🎉 BONUS ATP +10");
+    } else if(rand<0.66){
+        score += 20;
+        alert("🔥 CRITICAL HIT +20");
+    } else {
+        score -= 5;
+        alert("☠ Mutation! -5");
+    }
+    document.getElementById("score").innerText=score;
+}
+
+canvas.addEventListener("click", function(e){
+    if(!arrow){
+        let dx = e.clientX - bow.x;
+        let dy = e.clientY - bow.y;
+        let power = 0.1;
+
+        arrow = {
+            x: bow.x,
+            y: bow.y,
+            vx: dx*power,
+            vy: dy*power
+        };
+    }
+});
+
+update();
+</script>
+</body>
+</html>
