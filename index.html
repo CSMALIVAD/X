@@ -2,157 +2,106 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Gravity Sand Simulator</title>
+<title>Smooth Sand Flow</title>
 <style>
 body{
     margin:0;
-    background:black;
     overflow:hidden;
+    background:radial-gradient(circle at center, #111, #000);
 }
 canvas{display:block;}
-#panel{
-    position:absolute;
-    top:10px;
-    left:10px;
-    color:white;
-    font-family:Arial;
-    font-size:14px;
-}
-button{
-    margin:2px;
-}
 </style>
 </head>
 <body>
 
-<div id="panel">
-Gravity:
-<button onclick="setGravity(0,1)">Down</button>
-<button onclick="setGravity(0,-1)">Up</button>
-<button onclick="setGravity(-1,0)">Left</button>
-<button onclick="setGravity(1,0)">Right</button>
-<br>
-<button onclick="toggleSlow()">Slow Motion</button>
-<button onclick="toggleBlackHole()">Black Hole</button>
-<button onclick="increaseMass()">Increase Mass</button>
-</div>
-
-<canvas id="canvas"></canvas>
+<canvas id="c"></canvas>
 
 <script>
-const canvas = document.getElementById("canvas");
+const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-const size = 4;
-const cols = Math.floor(canvas.width/size);
-const rows = Math.floor(canvas.height/size);
+let particles = [];
+let gravity = 0.3;
+let mouseDown = false;
+let mouseX = 0;
+let mouseY = 0;
 
-let grid = [];
-let gravity = {x:0, y:1};
-let slow = false;
-let blackHole = false;
-let mass = 1;
-
-for(let x=0;x<cols;x++){
-    grid[x] = [];
-    for(let y=0;y<rows;y++){
-        grid[x][y] = 0;
-    }
-}
-
+canvas.addEventListener("mousedown", ()=>mouseDown=true);
+canvas.addEventListener("mouseup", ()=>mouseDown=false);
 canvas.addEventListener("mousemove", e=>{
-    if(e.buttons){
-        let rect = canvas.getBoundingClientRect();
-        let x = Math.floor((e.clientX - rect.left)/size);
-        let y = Math.floor((e.clientY - rect.top)/size);
-        for(let i=-2;i<=2;i++){
-            for(let j=-2;j<=2;j++){
-                if(x+i>=0 && x+i<cols && y+j>=0 && y+j<rows){
-                    grid[x+i][y+j] = 1;
-                }
-            }
-        }
-    }
+    mouseX = e.clientX;
+    mouseY = e.clientY;
 });
 
-function setGravity(x,y){
-    gravity.x = x;
-    gravity.y = y;
-}
+canvas.addEventListener("touchstart", ()=>mouseDown=true);
+canvas.addEventListener("touchend", ()=>mouseDown=false);
+canvas.addEventListener("touchmove", e=>{
+    mouseX = e.touches[0].clientX;
+    mouseY = e.touches[0].clientY;
+});
 
-function toggleSlow(){
-    slow = !slow;
-}
-
-function toggleBlackHole(){
-    blackHole = !blackHole;
-}
-
-function increaseMass(){
-    mass += 0.2;
+function addParticles(){
+    for(let i=0;i<10;i++){
+        particles.push({
+            x: mouseX,
+            y: mouseY,
+            vx: (Math.random()-0.5)*1,
+            vy: Math.random()*-1,
+            size: 3 + Math.random()*2
+        });
+    }
 }
 
 function update(){
-    for(let x=0;x<cols;x++){
-        for(let y=rows-1;y>=0;y--){
-            if(grid[x][y] === 1){
+    if(mouseDown) addParticles();
 
-                let nx = x + gravity.x;
-                let ny = y + gravity.y;
+    for(let i=0;i<particles.length;i++){
+        let p = particles[i];
+        p.vy += gravity;
+        p.x += p.vx;
+        p.y += p.vy;
 
-                if(nx>=0 && nx<cols && ny>=0 && ny<rows){
-                    if(grid[nx][ny] === 0){
-                        grid[nx][ny] = 1;
-                        grid[x][y] = 0;
-                    }
-                    else{
-                        // slide left/right
-                        let dir = Math.random() < 0.5 ? -1 : 1;
-                        let sx = x + dir;
-                        if(sx>=0 && sx<cols && grid[sx][y]===0){
-                            grid[sx][y]=1;
-                            grid[x][y]=0;
-                        }
-                    }
-                }
-
-                if(blackHole){
-                    let cx = Math.floor(cols/2);
-                    let cy = Math.floor(rows/2);
-                    let dx = cx - x;
-                    let dy = cy - y;
-                    if(Math.abs(dx)+Math.abs(dy)<20){
-                        grid[x][y]=0;
-                    }
-                }
-            }
+        // ground collision
+        if(p.y > canvas.height - p.size){
+            p.y = canvas.height - p.size;
+            p.vy *= -0.3;
+            p.vx *= 0.8;
         }
+
+        // side walls
+        if(p.x < 0 || p.x > canvas.width){
+            p.vx *= -0.5;
+        }
+    }
+
+    // limit particles
+    if(particles.length > 4000){
+        particles.splice(0,100);
     }
 }
 
 function draw(){
-    ctx.fillStyle="black";
+    ctx.fillStyle = "rgba(0,0,0,0.2)";
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    ctx.fillStyle="gold";
-    for(let x=0;x<cols;x++){
-        for(let y=0;y<rows;y++){
-            if(grid[x][y]===1){
-                ctx.fillRect(x*size,y*size,size,size);
-            }
-        }
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = "gold";
+    ctx.fillStyle = "gold";
+
+    for(let p of particles){
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+        ctx.fill();
     }
+
+    ctx.shadowBlur = 0;
 }
 
 function loop(){
-    if(!slow){
-        update();
-    } else {
-        if(Math.random()<0.3) update();
-    }
+    update();
     draw();
     requestAnimationFrame(loop);
 }
